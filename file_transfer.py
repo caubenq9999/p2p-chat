@@ -279,6 +279,13 @@ class FileTransferManager:
         for transfer_id in active_ids:
             self._fail(transfer_id, "application stopped")
 
+    def handle_disconnect(self, peer_id: str) -> None:
+        """Abort transfers and remove partial files when the shared TCP closes."""
+        with self._lock:
+            ids = [key for key, record in self._transfers.items() if record.peer_id == peer_id]
+        for transfer_id in ids:
+            self._fail(transfer_id, "TCP connection closed")
+
     # ------------------------------------------------------------------
     # Luồng gửi file
     # ------------------------------------------------------------------

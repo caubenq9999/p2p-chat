@@ -1,5 +1,7 @@
 
 from dataclasses import dataclass, asdict
+import uuid
+from models import Peer, Event
 import json
 import socket
 import threading
@@ -24,6 +26,7 @@ class PeerInfo:
     tcp_port: int
     status: str
     last_seen: float
+    peer_id: str = ""
 
     @property
     def peer_key(self) -> str:
@@ -51,7 +54,7 @@ class UDPPeerDiscovery:
     """
     Quản lý tiến trình khám phá ngang hàng (Peer Discovery) và trạng thái (Online Status) qua UDP.
     Chạy ngầm các daemon threads theo đúng Thread Model ở Mục 5.1:
-    - UDP broadcaster: mỗi 3 giây gửi gói HELLO|<name>|<tcp_port>|<status>
+    - UDP broadcaster: mỗi 3 giây gửi JSON PRESENCE theo Contract Sprint 1
     - UDP listener   : nhận gói tin UDP trên cổng 9999 và cập nhật online-users list
     - Timeout checker: loại bỏ peer không phản hồi sau 10 giây
     """
@@ -65,20 +68,25 @@ class UDPPeerDiscovery:
         on_peer_online: Optional[Callable[[PeerInfo], None]] = None,
         on_peer_offline: Optional[Callable[[PeerInfo], None]] = None,
         on_peer_status_change: Optional[Callable[[PeerInfo, str], None]] = None,
+        *,
+        peer_id: Optional[str] = None,
+        event_queue=None,
     ):
         self.name = name.strip()
         self.tcp_port = int(tcp_port)
         self.udp_port = int(udp_port)
         self.status = status.strip().lower() if status else "online"
         self.local_ip = get_local_lan_ip()
+        self.peer_id = peer_id or uuid.uuid4().hex
+        self.event_queue = event_queue
 
         self._peers: Dict[str, PeerInfo] = {}
         self._lock = threading.RLock()
         self._running = threading.Event()
 
-        self.on_peer_online = on_peer_online or self._default_on_online
-        self.on_peer_offline = on_peer_offline or self._default_on_offline
-        self.on_peer_status_change = on_peer_status_change or self._default_on_status_change
+        self.on_peer_online = on_peer_online or (lambda p: self._notify("PEER_ONLINE", p))
+        self.on_peer_offline = on_peer_offline or (lambda p: self._notify("PEER_OFFLINE", p))
+        self.on_peer_status_change = on_peer_status_change or (lambda p, old: self._notify("PEER_UPDATED", p))
 
         self._send_sock: Optional[socket.socket] = None
         self._recv_sock: Optional[socket.socket] = None
@@ -87,6 +95,10 @@ class UDPPeerDiscovery:
         self._cleanup_thread: Optional[threading.Thread] = None
 
     
+    def _notify(self, kind, peer):
+        if self.event_queue is not None:
+            self.event_queue.put(Event(kind, peer.peer_id, {"peer": peer.to_dict()}))
+
     @staticmethod
     def _default_on_online(peer: PeerInfo) -> None:
         print(f"\r\033[K[*] {peer.name} ({peer.ip}:{peer.tcp_port}) is now {peer.status}\n> ", end="", flush=True)
@@ -125,15 +137,11 @@ class UDPPeerDiscovery:
    
     def _build_presence_packet(self, msg_type: str = "HELLO") -> bytes:
         """
-        Tạo gói tin UDP theo đúng Mục 5.2 của đề bài:
-        HELLO|<name>|<tcp_port>|<status>
-        Ví dụ: HELLO|Nguyen|5001|online
+        Tạo JSON PRESENCE/BYE với peer_id chung với TCP.
         """
-        if msg_type == "BYE":
-            text = f"BYE|{self.name}|{self.tcp_port}"
-        else:
-            text = f"HELLO|{self.name}|{self.tcp_port}|{self.status}"
-        return text.encode("utf-8")
+        return json.dumps({"v": 1, "type": "BYE" if msg_type == "BYE" else "PRESENCE",
+                           "peer_id": self.peer_id, "name": self.name,
+                           "tcp_port": self.tcp_port, "status": self.status}).encode("utf-8")
 
     @staticmethod
     def _parse_packet(raw_bytes: bytes) -> Optional[dict]:
@@ -176,16 +184,21 @@ class UDPPeerDiscovery:
 
         try:
             data = json.loads(text)
-            if isinstance(data, dict) and "name" in data and "tcp_port" in data:
+            if (isinstance(data, dict) and data.get("v") == 1
+                    and isinstance(data.get("peer_id"), str) and data["peer_id"]
+                    and isinstance(data.get("name"), str)
+                    and type(data.get("tcp_port")) is int
+                    and data.get("type") in {"PRESENCE", "BYE"}):
                 raw_type = str(data.get("type", "HELLO")).upper()
                 return {
                     "type": "BYE" if raw_type in ("BYE", "OFFLINE") else "HELLO",
                     "name": str(data["name"]).strip(),
+                    "peer_id": data["peer_id"],
                     "tcp_port": int(data["tcp_port"]),
                     "status": str(data.get("status", "online")).strip().lower(),
                     "ip": data.get("ip"),
                 }
-        except (ValueError, json.JSONDecodeError):
+        except (ValueError, TypeError, RecursionError):
             pass
 
         return None
@@ -225,6 +238,8 @@ class UDPPeerDiscovery:
         Nếu cùng máy (sender_ip là IP của máy mình hoặc 127.0.0.1) VÀ trùng tcp_port -> Bỏ qua.
         Nhờ so sánh cả tcp_port nên bạn mở 2-3 cửa sổ khác port (5001, 5002, 5003) trên 1 máy vẫn thấy nhau!
         """
+        if parsed.get("peer_id"):
+            return parsed["peer_id"] == self.peer_id
         local_ips = {self.local_ip, "127.0.0.1", "0.0.0.0"}
         if sender_ip in local_ips and parsed.get("tcp_port") == self.tcp_port:
             return True
@@ -243,7 +258,7 @@ class UDPPeerDiscovery:
                 break
 
             parsed = self._parse_packet(raw_bytes)
-            if not parsed:
+            if not parsed or not parsed.get("peer_id"):
                 continue
 
    
@@ -259,8 +274,8 @@ class UDPPeerDiscovery:
                 continue
 
          
-            peer_ip = self.local_ip if sender_ip in ("127.0.0.1", "0.0.0.0") else sender_ip
-            peer_key = f"{peer_ip}:{tcp_port}"
+            peer_ip = sender_ip
+            peer_key = parsed["peer_id"]
             now = time.time()
 
             if msg_type == "BYE":
@@ -284,15 +299,19 @@ class UDPPeerDiscovery:
                         tcp_port=tcp_port,
                         status=status,
                         last_seen=now,
+                        peer_id=peer_key,
                     )
                     self._peers[peer_key] = peer_obj
                     new_peer_event = peer_obj
                 else:
                     old_status = existing.status
+                    changed = (existing.name, existing.ip, existing.tcp_port, old_status) != (name, peer_ip, tcp_port, status)
                     existing.name = name
+                    existing.ip = peer_ip
+                    existing.tcp_port = tcp_port
                     existing.status = status
                     existing.last_seen = now
-                    if old_status != status:
+                    if changed:
                         status_changed_event = (existing, old_status)
 
             if new_peer_event:
@@ -303,29 +322,43 @@ class UDPPeerDiscovery:
     def _cleanup_loop(self) -> None:
         """Thread 3 (Timeout checker): Xóa peer không gửi gói tin sau 10 giây."""
         while self._running.is_set():
-            now = time.time()
-            expired_peers: List[PeerInfo] = []
-
-            with self._lock:
-                keys_to_remove = [
-                    key
-                    for key, peer in self._peers.items()
-                    if (now - peer.last_seen) > PEER_TIMEOUT
-                ]
-                for key in keys_to_remove:
-                    expired_peers.append(self._peers.pop(key))
-
-            for peer in expired_peers:
-                self.on_peer_offline(peer)
-
+            self.check_timeouts()
             time.sleep(CLEANUP_INTERVAL)
+
+    def check_timeouts(self):
+        with self._lock:
+            expired = [key for key, peer in self._peers.items()
+                       if time.time() - peer.last_seen > PEER_TIMEOUT]
+            peers = [self._peers.pop(key) for key in expired]
+        for peer in peers:
+            self.on_peer_offline(peer)
+
+    def get_peer(self, peer_id):
+        with self._lock:
+            peer = self._peers.get(peer_id)
+            return Peer(peer.peer_id, peer.name, peer.ip, peer.tcp_port, peer.last_seen) if peer else None
+
+    def start_discovery(self):
+        self.start()
+
+    def stop_discovery(self):
+        self.stop()
+
+    def broadcast_presence(self):
+        self.send_presence_once()
 
    
     def start(self) -> None:
         """Khởi động dịch vụ UDP Peer Discovery."""
         if self._running.is_set():
             return
-        self._setup_sockets()
+        try:
+            self._setup_sockets()
+        except OSError:
+            for sock in (self._send_sock, self._recv_sock):
+                if sock:
+                    sock.close()
+            raise
         self._running.set()
 
         self._listen_thread = threading.Thread(
@@ -357,6 +390,9 @@ class UDPPeerDiscovery:
                     pass
         self._send_sock = None
         self._recv_sock = None
+        for thread in (self._broadcast_thread, self._listen_thread, self._cleanup_thread):
+            if thread and thread is not threading.current_thread():
+                thread.join(timeout=2)
 
     def set_status(self, new_status: str) -> bool:
         """
@@ -371,8 +407,13 @@ class UDPPeerDiscovery:
             self.send_presence_once(msg_type="HELLO")
         return True
 
-    def get_online_peers(self) -> List[Dict]:
-        """Trả về danh sách các peer đang online (name, ip, tcp_port, status, last_seen)."""
+    def get_online_peers(self) -> List[Peer]:
+        """Snapshot Peer theo shared contract; không trả mutable record nội bộ."""
+        with self._lock:
+            return [Peer(p.peer_id, p.name, p.ip, p.tcp_port, p.last_seen)
+                    for p in self._peers.values()]
+
+    def _peer_dicts(self) -> List[Dict]:
         with self._lock:
             return [peer.to_dict() for peer in self._peers.values()]
 
@@ -391,7 +432,7 @@ class UDPPeerDiscovery:
         Cho phép lấy thông tin peer theo số thứ tự trong `/list` (1, 2, 3...) hoặc theo tên.
         """
         query = name_or_number.strip()
-        peers = self.get_online_peers()
+        peers = self._peer_dicts()
         if query.isdigit():
             idx = int(query) - 1
             if 0 <= idx < len(peers):
@@ -404,7 +445,7 @@ class UDPPeerDiscovery:
           1. Minh  (192.168.1.12:6000) online
           2. Lan   (192.168.1.15:6000) away
         """
-        peers = self.get_online_peers()
+        peers = self._peer_dicts()
         if not peers:
             return "[*] No other users are currently online."
         lines = []

@@ -167,6 +167,16 @@ class LANChatUI:
             self.show_message(peer_id, str(data.get("text", "")))
             return
 
+        if event_type == "UI_SEND_RESULT":
+            data["message"]["status"] = "sent" if data["ok"] else "failed"
+            self._render_conversation(scroll_to_end=True)
+            return
+
+        if event_type == "UI_CONNECT_ERROR":
+            if peer_id == self.selected_peer_id:
+                self.connection_var.set(data["reason"])
+            return
+
         if event_type == "FILE_REQUEST":
             self._handle_file_request(peer_id, data)
             return
@@ -295,7 +305,7 @@ class LANChatUI:
         attach_icon = self._icon("paperclip.png", 27)
         send_icon = self._icon("send.png", 28)
         self.attach_button = tk.Button(
-            frame, image=attach_icon, command=self._on_attach, bd=0, cursor="hand2",
+            frame, image=attach_icon, text="File", compound="center", command=self._on_attach, bd=0, cursor="hand2",
             bg=PINK_LIGHT, activebackground="#FFD5E7", width=52, height=52,
         )
         self.attach_button.pack(side="left", padx=(20, 12), pady=14)
@@ -308,7 +318,7 @@ class LANChatUI:
         self.message_entry.pack(side="left", fill="x", expand=True, ipady=12, pady=15)
         self.message_entry.bind("<Return>", self._on_send)
         self.send_button = tk.Button(
-            frame, image=send_icon, command=self._on_send, bd=0, cursor="hand2",
+            frame, image=send_icon, text="Gửi", compound="center", command=self._on_send, bd=0, cursor="hand2",
             bg=PINK, activebackground=PINK_DARK, width=54, height=54,
         )
         self.send_button.pack(side="left", padx=14, pady=14)
@@ -510,7 +520,8 @@ class LANChatUI:
             self.chat.connect(peer)
         except Exception as exc:
             if not self._closed:
-                self.root.after(0, lambda: self.connection_var.set(f"Không thể kết nối: {exc}"))
+                self.event_queue.put({"type": "UI_CONNECT_ERROR", "peer_id": peer.peer_id,
+                                      "data": {"reason": f"Không thể kết nối: {exc}"}})
 
     def _on_send(self, _event: Any = None) -> str:
         peer_id = self.selected_peer_id
@@ -544,9 +555,9 @@ class LANChatUI:
             ok = bool(self.chat.send_message(peer_id, text))
         except Exception:
             ok = False
-        message["status"] = "sent" if ok else "failed"
         if not self._closed:
-            self.root.after(0, lambda: self._render_conversation(scroll_to_end=True))
+            self.event_queue.put({"type": "UI_SEND_RESULT", "peer_id": peer_id,
+                                  "data": {"message": message, "ok": ok}})
 
     def _on_attach(self) -> None:
         peer_id = self.selected_peer_id
@@ -751,6 +762,7 @@ class LANChatUI:
     def _on_close(self) -> None:
         self._closed = True
         for service, method in (
+            (self.chat, "stop_server"),
             (self.file_transfer, "shutdown"),
             (self.discovery, "stop_discovery"),
         ):

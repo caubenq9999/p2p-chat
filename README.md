@@ -6,9 +6,36 @@ Python 3.10+, thư viện chuẩn, raw TCP socket.
 
 - TCP Chat: `chat.py` triển khai transport, chat nhiều peer và event queue.
 - Shared: `models.py`, `protocol.py` theo Contract Sprint 1; cả nhóm cần review khi tích hợp.
-- UDP discovery: broadcaster, listener, online list, timeout — Nguyên phụ trách, chưa triển khai.
-- File transfer và UI — Hoàng phụ trách, chưa triển khai.
-- `main.py` tích hợp chưa triển khai.
+- UDP discovery: merge từ `origin/Peer-discovery`, cập nhật shared peer_id và event queue.
+- File transfer và Tkinter UI: merge từ `origin/Hoang`.
+- `main.py`: ghép discovery, TCP, file dispatcher và queue cho UI.
+
+## Chạy ứng dụng tích hợp
+
+Mở ba terminal trong `p2p-chat` (hoặc chạy mỗi lệnh trên một máy cùng LAN):
+
+```powershell
+python main.py --name Huy --port 5001
+python main.py --name Nguyen --port 5002
+python main.py --name Hoang --port 5003
+```
+
+Chọn người dùng trong danh sách để chat, nút File để gửi file. Người nhận chọn
+chấp nhận/từ chối và nơi lưu. Mỗi instance tạo UUID chung cho UDP/TCP trong phiên.
+UDP mặc định 9999; các instance phải dùng cùng UDP port, TCP port khác nhau nếu
+cùng máy. Windows cần cho phép Python qua firewall trên mạng LAN để khám phá/kết nối.
+Chạy `python ui.py` chỉ mở giao diện demo, không có mạng.
+
+Nhánh tích hợp: `integration/sprint1`. Hai nhánh nguồn được merge giữ lịch sử.
+Discovery hiện phát JSON PRESENCE theo contract; bản cũ chỉ gửi
+`HELLO|name|port|status` không có peer_id sẽ bị bỏ qua. Các máy nên chạy cùng bản tích hợp.
+API start/stop cũ vẫn có, bổ sung start_discovery/stop_discovery/broadcast_presence,
+get_peer và get_online_peers trả shared Peer. Status được giữ trong event discovery.
+
+Controller chạy riêng, chuyển FILE_* tới FileTransfer và event hiển thị sang UI;
+không để hai consumer tranh nhau đọc một queue. Mất TCP làm thất bại các phiên
+file chưa hoàn tất và dọn file tạm. Gửi chat/file tự kết nối tới peer từ discovery.
+Branch Hoang chưa có thư mục ảnh UI nên hiện dùng ảnh nền dự phòng và nhãn nút.
 
 ## Kiểm thử
 
@@ -20,7 +47,10 @@ python -m unittest discover -s tests -v
 
 Test kiểm tra frame dài/Unicode, chia nhỏ, frame liên tiếp, dữ liệu sai,
 EOF giữa frame, nhiều peer, gửi đồng thời, dispatch packet file, kết nối chéo
-và shutdown. Chưa thay thế test LAN ba máy, discovery hay truyền file đủ/hash.
+và shutdown. Test tích hợp chạy ba instance với UDP broadcast/TCP thật trên một
+máy, kiểm tra chat, file 256 KiB/hash, refresh/timeout và mất TCP. Test Tkinter
+kiểm tra nhận tin vẫn giữ nội dung đang nhập (skip nếu môi trường không có Tk).
+Chưa kiểm thử LAN ba máy vật lý hay thao tác hộp thoại nhận file bằng tay.
 
 ## Tích hợp
 
