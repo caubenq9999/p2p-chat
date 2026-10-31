@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#fff0f7" />
+  <meta
+    name="description"
+    content="Giao diện LAN Chat dùng để nhắn tin và gửi file trực tiếp giữa các thiết bị trong cùng mạng LAN."
+  />
+  <title>LAN Chat · Nearby only</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="page-decoration page-decoration--left" aria-hidden="true"></div>
+  <div class="page-decoration page-decoration--right" aria-hidden="true"></div>
+
+  <main class="app-shell" aria-label="Ứng dụng LAN Chat">
+    <section class="chat-column" aria-label="Khu vực trò chuyện">
+      <header class="brand-banner">
+        <div class="brand-lockup">
+          <img class="brand-logo" src="./assets/logo-planet.svg" alt="" />
+          <div class="brand-copy">
+            <h1><strong>LAN</strong> Chat</h1>
+            <p>Chat directly. Nearby only.</p>
+          </div>
+        </div>
+        <span class="brand-dots" aria-hidden="true"></span>
+        <img class="hero-character" src="./assets/Chiikawa.png" alt="" />
+      </header>
+
+      <section class="chat-panel" aria-label="Hội thoại với Huy">
+        <header class="chat-peer-heading">
+          <div class="avatar-wrap avatar-wrap--large avatar-bubble">
+            <img id="peerAvatar" src="./assets/Chiikawa.png" alt="Avatar của Huy" />
+            <i class="online-indicator" aria-label="Đang online"></i>
+          </div>
+          <div class="peer-heading-copy">
+            <h2 id="peerName">Huy</h2>
+            <p id="peerDetails"><span>Online</span><b aria-hidden="true">•</b> 192.168.1.15</p>
+          </div>
+        </header>
+
+        <div class="message-list" id="messageList" role="log" aria-live="polite" aria-label="Tin nhắn">
+          <article class="message message--incoming">
+            <span class="message-avatar-wrap avatar-bubble"><img class="message-avatar" src="./assets/Chiikawa.png" alt="" /></span>
+            <div class="message-content"><p class="bubble">Hii</p><time datetime="10:24">10:24</time></div>
+          </article>
+
+          <article class="message message--outgoing">
+            <div class="message-content"><p class="bubble">hii</p><time datetime="10:24">10:24</time></div>
+            <span class="message-avatar-wrap avatar-bubble"><img class="message-avatar" src="./assets/Usagi.png" alt="" /></span>
+          </article>
+
+          <article class="message message--incoming">
+            <span class="message-avatar-wrap avatar-bubble"><img class="message-avatar" src="./assets/Chiikawa.png" alt="" /></span>
+            <div class="message-content"><p class="bubble">gửi file nè</p><time datetime="10:25">10:25</time></div>
+          </article>
+
+          <article class="message message--incoming">
+            <span class="message-avatar-wrap avatar-bubble"><img class="message-avatar" src="./assets/Chiikawa.png" alt="" /></span>
+            <div class="message-content">
+              <div class="file-card file-card--transferring">
+                <img src="./assets/file.svg" alt="" class="file-icon" />
+                <div class="file-details"><strong title="report.pdf">report.pdf</strong><small>24.8 MB</small></div>
+                <div class="transfer-progress">
+                  <strong>68%</strong>
+                  <div class="progress-track" role="progressbar" aria-label="Đang nhận report.pdf" aria-valuemin="0" aria-valuemax="100" aria-valuenow="68">
+                    <span class="progress-fill" style="--progress: 68%"></span>
+                  </div>
+                </div>
+              </div>
+              <time datetime="10:25">10:25</time>
+            </div>
+          </article>
+
+          <article class="message message--outgoing">
+            <div class="message-content"><p class="bubble">okeee</p><time datetime="10:25">10:25</time></div>
+            <span class="message-avatar-wrap avatar-bubble"><img class="message-avatar" src="./assets/Usagi.png" alt="" /></span>
+          </article>
+
+          <article class="message message--outgoing">
+            <div class="message-content">
+              <div class="file-card file-card--transferring">
+                <img src="./assets/file.svg" alt="" class="file-icon" />
+                <div class="file-details"><strong title="image.png">image.png</strong><small>12.4 MB</small></div>
+                <div class="transfer-progress">
+                  <strong>36%</strong>
+                  <div class="progress-track" role="progressbar" aria-label="Đang gửi image.png" aria-valuemin="0" aria-valuemax="100" aria-valuenow="36">
+                    <span class="progress-fill" style="--progress: 36%"></span>
+                  </div>
+                </div>
+              </div>
+              <time datetime="10:26">10:26</time>
+            </div>
+            <span class="message-avatar-wrap avatar-bubble"><img class="message-avatar" src="./assets/Usagi.png" alt="" /></span>
+          </article>
+        </div>
+
+        <form class="composer" id="composer" autocomplete="off">
+          <label class="icon-button attach-button" for="fileInput" title="Đính kèm file">
+            <img src="./assets/paperclip.svg" alt="" />
+            <span class="sr-only">Đính kèm file</span>
+          </label>
+          <input id="fileInput" type="file" hidden />
+          <label class="message-field">
+            <span class="sr-only">Nhập tin nhắn</span>
+            <input id="messageInput" name="message" type="text" placeholder="Nhập tin nhắn..." maxlength="2000" />
+          </label>
+          <button class="icon-button send-button" type="submit" title="Gửi tin nhắn">
+            <img src="./assets/send.svg" alt="" />
+            <span class="sr-only">Gửi tin nhắn</span>
+          </button>
+        </form>
+      </section>
+    </section>
+
+    <aside class="sidebar" aria-label="Tài khoản và người dùng trong LAN">
+      <section class="my-profile" aria-label="Thông tin của tôi">
+        <div class="profile-avatar-wrap avatar-bubble">
+          <img class="profile-avatar" src="./assets/Momonga.png" alt="Avatar của Hoàng" />
+        </div>
+        <h2>Hoàng</h2>
+        <p>192.168.1.8</p>
+      </section>
+
+      <section class="nearby-panel" aria-labelledby="nearbyTitle">
+        <div class="nearby-toolbar">
+          <h2 class="nearby-heading" id="nearbyTitle">
+            <img src="./assets/radar.svg" alt="" />
+            <span>Nearby Friends</span>
+          </h2>
+          <button class="refresh-button" id="refreshPeers" type="button" aria-label="Làm mới danh sách người dùng" title="Làm mới danh sách">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 11a8.1 8.1 0 0 0-14.9-4.3L3 9m0 0V4m0 5h5M4 13a8.1 8.1 0 0 0 14.9 4.3L21 15m0 0v5m0-5h-5" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="peerList" class="peer-list">
+          <button class="peer-row is-selected" type="button" data-id="huy" aria-current="true">
+            <span class="peer-avatar avatar-bubble"><img src="./assets/Chiikawa.png" alt="" /><i class="online-indicator" aria-label="Đang online"></i></span>
+            <span class="peer-copy"><b>Huy</b><small>192.168.1.15</small></span>
+          </button>
+          <button class="peer-row" type="button" data-id="nguyen">
+            <span class="peer-avatar avatar-bubble"><img src="./assets/Usagi.png" alt="" /><i class="online-indicator" aria-label="Đang online"></i></span>
+            <span class="peer-copy"><b>Nguyên</b><small>192.168.1.22</small></span>
+            <span class="unread-badge" aria-label="2 tin nhắn chưa đọc">2</span>
+          </button>
+          <button class="peer-row" type="button" data-id="linh">
+            <span class="peer-avatar avatar-bubble"><img src="./assets/Furuhonya.png" alt="" /><i class="online-indicator" aria-label="Đang online"></i></span>
+            <span class="peer-copy"><b>Linh</b><small>192.168.1.27</small></span>
+          </button>
+          <button class="peer-row" type="button" data-id="minh">
+            <span class="peer-avatar avatar-bubble"><img src="./assets/Kurimanju.png" alt="" /><i class="online-indicator" aria-label="Đang online"></i></span>
+            <span class="peer-copy"><b>Minh</b><small>192.168.1.33</small></span>
+          </button>
+          <button class="peer-row" type="button" data-id="khoa">
+            <span class="peer-avatar avatar-bubble"><img src="./assets/Hachiware.png" alt="" /><i class="online-indicator" aria-label="Đang online"></i></span>
+            <span class="peer-copy"><b>Khoa</b><small>192.168.1.41</small></span>
+          </button>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
