@@ -8,6 +8,10 @@ các thread mạng hoạt động độc lập với main thread của Tkinter.
 from __future__ import annotations
 
 import hashlib
+import base64
+import logging
+
+import resvg_py
 import queue
 import threading
 from dataclasses import dataclass
@@ -66,8 +70,15 @@ class LANChatUI:
         self.demo_mode = demo_mode
 
         base = Path(__file__).resolve().parent
-        self.assets_dir = Path(assets_dir) if assets_dir else base / "LANChat_UI_Assets" / "assets"
-        self._avatar_files = sorted((self.assets_dir / "avatars").glob("*.png"))
+        if assets_dir:
+            self.assets_dir = Path(assets_dir)
+        else:
+            candidates = (base / "assets", base / "LANChat_UI_Assets" / "assets")
+            self.assets_dir = next((path for path in candidates if path.is_dir()), candidates[0])
+        avatar_dir = self.assets_dir / "avatars"
+        if not avatar_dir.is_dir():
+            avatar_dir = self.assets_dir
+        self._avatar_files = sorted(avatar_dir.glob("*.png"))
         self._photos: Dict[tuple, tk.PhotoImage] = {}
 
         self.peers: Dict[str, PeerView] = {}
@@ -251,7 +262,7 @@ class LANChatUI:
         frame = tk.Frame(parent, bg="#F77FB4", height=92)
         frame.grid(row=0, column=0, sticky="ew")
         frame.grid_propagate(False)
-        logo = self._icon("logo-planet.png", 58)
+        logo = self._icon("logo-planet.svg", 58)
         tk.Label(frame, image=logo, bg="#F77FB4").pack(side="left", padx=(28, 14))
         copy = tk.Frame(frame, bg="#F77FB4")
         copy.pack(side="left", pady=13)
@@ -302,26 +313,30 @@ class LANChatUI:
         frame = tk.Frame(parent, bg=WHITE, height=82)
         frame.grid(row=3, column=0, sticky="ew")
         frame.grid_propagate(False)
-        attach_icon = self._icon("paperclip.png", 27)
-        send_icon = self._icon("send.png", 28)
+        frame.grid_columnconfigure(1, weight=1)
+        frame.grid_rowconfigure(0, weight=1)
+        attach_icon = self._icon("paperclip.svg", 27)
         self.attach_button = tk.Button(
-            frame, image=attach_icon, text="File", compound="center", command=self._on_attach, bd=0, cursor="hand2",
+            frame, image=attach_icon, command=self._on_attach, bd=0, cursor="hand2",
             bg=PINK_LIGHT, activebackground="#FFD5E7", width=52, height=52,
         )
-        self.attach_button.pack(side="left", padx=(20, 12), pady=14)
+        self.attach_button.grid(row=0, column=0, padx=(20, 12), pady=14)
         self.message_entry = tk.Entry(
             frame, bd=1, relief="solid", highlightthickness=2,
             highlightbackground="#F7C9DE", highlightcolor=PINK,
             fg=TEXT, bg="#FFFAFD", insertbackground=TEXT,
             font=("Segoe UI", 12),
         )
-        self.message_entry.pack(side="left", fill="x", expand=True, ipady=12, pady=15)
+        self.message_entry.grid(row=0, column=1, sticky="ew", ipady=12, pady=15)
         self.message_entry.bind("<Return>", self._on_send)
+        send_icon = self._icon("send.svg", 28)
         self.send_button = tk.Button(
-            frame, image=send_icon, text="Gửi", compound="center", command=self._on_send, bd=0, cursor="hand2",
-            bg=PINK, activebackground=PINK_DARK, width=54, height=54,
+            frame, image=send_icon, command=self._on_send, bd=0, cursor="hand2",
+            font=("Segoe UI", 12, "bold"), fg=WHITE, activeforeground=WHITE,
+            disabledforeground="#F5D9E5", bg=PINK, activebackground=PINK_DARK,
+            width=54, height=54,
         )
-        self.send_button.pack(side="left", padx=14, pady=14)
+        self.send_button.grid(row=0, column=2, padx=14, pady=14)
 
     def _build_profile(self, parent: tk.Widget) -> None:
         frame = tk.Frame(parent, bg="#FFDCE9", height=220)
@@ -341,7 +356,7 @@ class LANChatUI:
         frame.grid_columnconfigure(0, weight=1)
         heading = tk.Frame(frame, bg="#FFF9FC")
         heading.grid(row=0, column=0, sticky="ew", pady=(0, 12))
-        radar = self._icon("radar.png", 25)
+        radar = self._icon("radar.svg", 25)
         tk.Label(heading, image=radar, bg="#FFF9FC").pack(side="left")
         tk.Label(heading, text="Nearby Friends", bg="#FFF9FC", fg=PINK,
                  font=("Segoe UI", 15, "bold")).pack(side="left", padx=8)
@@ -465,7 +480,7 @@ class LANChatUI:
         card = tk.Frame(parent, bg="#FFE6F0", width=385, height=76)
         card.pack()
         card.pack_propagate(False)
-        icon = self._icon("file.png", 38)
+        icon = self._icon("file.svg", 38)
         tk.Label(card, image=icon, bg="#FFE6F0").pack(side="left", padx=(15, 12))
         copy = tk.Frame(card, bg="#FFE6F0")
         copy.pack(side="left", fill="y", pady=13)
@@ -710,18 +725,27 @@ class LANChatUI:
         return self._photo(path, target)
 
     def _icon(self, name: str, target: int) -> tk.PhotoImage:
-        path = self.assets_dir / "icons" / name
-        return self._photo(path, target) if path.exists() else self._blank_photo(target)
+        for directory in (self.assets_dir, self.assets_dir / "icons"):
+            path = directory / name
+            if path.is_file():
+                return self._photo(path, target)
+        logging.warning("Missing UI icon: %s in %s", name, self.assets_dir)
+        return self._blank_photo(target)
 
     def _photo(self, path: Path, target: int) -> tk.PhotoImage:
         key = (str(path), target)
         if key in self._photos:
             return self._photos[key]
         try:
-            original = tk.PhotoImage(file=str(path))
-            factor = max(1, max(original.width(), original.height()) // target)
-            image = original.subsample(factor, factor)
-        except tk.TclError:
+            if path.suffix.lower() == ".svg":
+                png = resvg_py.svg_to_bytes(svg_path=str(path), width=target, height=target)
+                image = tk.PhotoImage(master=self.root, data=base64.b64encode(png), format="png")
+            else:
+                original = tk.PhotoImage(master=self.root, file=str(path))
+                factor = max(1, max(original.width(), original.height()) // target)
+                image = original.subsample(factor, factor)
+        except (tk.TclError, ValueError, OSError) as exc:
+            logging.warning("Cannot load UI asset %s: %s", path, exc)
             image = self._blank_photo(target)
         self._photos[key] = image
         return image

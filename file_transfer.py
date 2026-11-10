@@ -92,6 +92,7 @@ class TransferRecord:
             "bytes_transferred": self.bytes_transferred,
             "path": str(self.save_path or self.source_path or ""),
             "reason": self.reason,
+            "created_at": self.created_at,
         }
 
 
@@ -179,13 +180,14 @@ class FileTransferManager:
                 or record.status != TransferStatus.PENDING
             ):
                 return False
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            temp_path = self._available_temp_path(destination, transfer_id)
             try:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                temp_path = self._available_temp_path(destination, transfer_id)
                 handle = open(temp_path, "xb")
             except OSError as exc:
                 self._fail_locked(record, f"cannot create destination: {exc}")
                 self._emit("FILE_FAILED", record)
+                self._send_result(record, False, record.reason)
                 return False
             record.save_path = destination
             record.temp_path = temp_path
@@ -229,6 +231,11 @@ class FileTransferManager:
             })
             return
         peer_id = str(packet.get("sender_id") or packet.get("peer_id") or "")
+        # A packet from another peer must never abort the owner's transfer.
+        with self._lock:
+            existing = self._transfers.get(str(payload.get("transfer_id", "")))
+            if existing is not None and existing.peer_id != peer_id:
+                return
         handlers = {
             "FILE_OFFER": self._handle_offer,
             "FILE_ACCEPT": self._handle_accept,
@@ -255,6 +262,16 @@ class FileTransferManager:
         with self._lock:
             record = self._transfers.get(transfer_id)
             return record.progress if record else 0.0
+
+    def cancel_transfer(self, transfer_id: str) -> bool:
+        with self._lock:
+            record = self._transfers.get(transfer_id)
+            if record is None or record.status in {TransferStatus.COMPLETED, TransferStatus.FAILED, TransferStatus.REJECTED}:
+                return False
+            self._fail_locked(record, "Transfer cancelled")
+        self._emit("FILE_FAILED", record)
+        self._send_result(record, False, record.reason)
+        return True
 
     def get_transfer(self, transfer_id: str) -> Optional[dict]:
         """Lấy bản sao dữ liệu công khai của một phiên truyền file."""
@@ -348,6 +365,9 @@ class FileTransferManager:
             with open(source, "rb") as handle:
                 seq = 0
                 while not self._stopping.is_set():
+                    with self._lock:
+                        if record.status != TransferStatus.SENDING:
+                            return
                     chunk = handle.read(self.chunk_size)
                     if not chunk:
                         break
@@ -368,8 +388,9 @@ class FileTransferManager:
                 if self._stopping.is_set():
                     raise ConnectionError("application stopped")
             with self._lock:
-                if record.status == TransferStatus.SENDING:
-                    record.status = TransferStatus.WAITING_RESULT
+                if record.status != TransferStatus.SENDING:
+                    return
+                record.status = TransferStatus.WAITING_RESULT
             # Chuyển sang WAITING_RESULT trước khi gửi FILE_END. Với transport
             # cục bộ nhanh, bên nhận có thể kiểm tra và trả FILE_RESULT từ một
             # thread khác trước khi send_packet(FILE_END) kịp trả về.
@@ -377,7 +398,7 @@ class FileTransferManager:
                 raise ConnectionError("could not send end-of-file packet")
             self._emit_progress(record, force=True)
         except (OSError, ConnectionError) as exc:
-            self._fail(transfer_id, str(exc))
+            self._fail(transfer_id, str(exc), notify_peer=True)
 
     def _handle_reject(self, peer_id: str, payload: dict) -> None:
         transfer_id = self._required_id(payload)
@@ -396,18 +417,21 @@ class FileTransferManager:
         transfer_id = self._required_id(payload)
         with self._lock:
             record = self._transfers.get(transfer_id)
-            if record is None or record.direction != TransferDirection.OUTGOING:
+            if record is None:
                 return
             self._check_peer(record, peer_id)
-            if record.status != TransferStatus.WAITING_RESULT:
+            if record.status in {TransferStatus.COMPLETED, TransferStatus.FAILED, TransferStatus.REJECTED}:
                 return
-            if bool(payload.get("ok")):
+            if type(payload.get("ok")) is not bool:
+                raise ValueError("FILE_RESULT.ok must be boolean")
+            if payload["ok"]:
+                if record.direction != TransferDirection.OUTGOING or record.status != TransferStatus.WAITING_RESULT:
+                    return
                 record.status = TransferStatus.COMPLETED
                 record.bytes_transferred = record.size
                 event_type = "FILE_COMPLETED"
             else:
-                record.status = TransferStatus.FAILED
-                record.reason = str(payload.get("reason") or "receiver rejected file result")
+                self._fail_locked(record, str(payload.get("reason") or "peer aborted transfer"))
                 event_type = "FILE_FAILED"
         self._emit(event_type, record)
 

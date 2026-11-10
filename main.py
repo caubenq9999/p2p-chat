@@ -31,7 +31,11 @@ class ConnectedTransport:
         return self._ensure(peer_id) and self.chat.send_message(peer_id, text)
 
     def send_packet(self, peer_id, packet):
-        return self._ensure(peer_id) and self.chat.send_packet(peer_id, packet)
+        # Only a new offer may establish a connection. Never resume a broken file
+        # session by silently opening a fresh socket for a chunk/result.
+        if packet.get("type") == "FILE_OFFER" and not self._ensure(peer_id):
+            return False
+        return self.chat.send_packet(peer_id, packet)
 
 
 class Application:

@@ -1,6 +1,10 @@
 # P2P Chat — Sprint 1
 
-Python 3.10+, thư viện chuẩn, raw TCP socket.
+Python 3.10+, raw TCP socket. UI dùng `resvg-py` để đọc các SVG gốc trong `assets/`.
+
+```powershell
+python -m pip install -r requirements.txt
+```
 
 ## Trạng thái
 
@@ -11,6 +15,39 @@ Python 3.10+, thư viện chuẩn, raw TCP socket.
 - `main.py`: ghép discovery, TCP, file dispatcher và queue cho UI.
 
 ## Chạy ứng dụng tích hợp
+
+### Bản web (chat và file thật)
+
+Dừng `python -m http.server` cũ bằng Ctrl+C. Mở hai terminal:
+
+```powershell
+python web_app.py --name Huy --port 5001 --web-port 8000
+python web_app.py --name Hoang --port 5002 --web-port 8001
+```
+
+Mở http://127.0.0.1:8000 và http://127.0.0.1:8001. Nếu TCP port đang bị app
+cũ chiếm, đổi thành 5011/5012. Mỗi server Python là một peer; hai tab cùng URL
+là cùng một peer. Web và Tkinter có thể chat/truyền file cho nhau.
+
+Trên hai máy LAN: mỗi máy chạy web_app.py rồi mở localhost của chính máy đó.
+HTTP chỉ bind loopback; UDP/TCP vẫn giao tiếp qua LAN. Browser dùng HTTP polling
+600 ms tới Python, peer-to-peer vẫn raw TCP/UDP, không dùng WebSocket.
+
+Web hỗ trợ upload tối đa 16 MiB/file. Người nhận bấm Nhận file/Từ chối;
+sau khi kiểm tra hash hoàn tất, ảnh PNG/JPEG/GIF/WebP hiện trong hội thoại;
+bấm ảnh để xem lớn hoặc Tải về máy để lưu với tên và đuôi gốc (kể cả tiếng Việt).
+Có thể Hủy truyền khi đang chờ/đang gửi; việc upload không khóa nút chat.
+Hội thoại và file đã nhận vẫn truy cập được khi peer offline trong phiên web.
+File gửi/nhận được lưu tại
+`.web-data/<peer_id>/` (không đưa vào Git); dọn thư mục khi đã tắt app nếu không
+cần giữ. Lịch sử chat ở RAM trong phiên server. CSS lấy từ branch Hoang.
+
+Quy ước tích hợp bổ sung: `FILE_RESULT {ok: false, reason}` chấm dứt phiên
+ở mọi trạng thái đang hoạt động, từ cả phía gửi và nhận (hủy/lỗi giữa chừng).
+`ok: true` chỉ được chấp nhận khi bên gửi đang chờ kết quả sau FILE_END.
+Hai phía cần cùng bản cập nhật để phản hồi hủy đầy đủ.
+
+### Bản desktop
 
 Mở ba terminal trong `p2p-chat` (hoặc chạy mỗi lệnh trên một máy cùng LAN):
 
@@ -35,7 +72,7 @@ get_peer và get_online_peers trả shared Peer. Status được giữ trong eve
 Controller chạy riêng, chuyển FILE_* tới FileTransfer và event hiển thị sang UI;
 không để hai consumer tranh nhau đọc một queue. Mất TCP làm thất bại các phiên
 file chưa hoàn tất và dọn file tạm. Gửi chat/file tự kết nối tới peer từ discovery.
-Branch Hoang chưa có thư mục ảnh UI nên hiện dùng ảnh nền dự phòng và nhãn nút.
+Assets PNG/SVG từ branch Hoang được dùng chung cho web và Tkinter.
 
 ## Kiểm thử
 
