@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#fff0f7" />
+  <meta
+    name="description"
+    content="Giao diện LAN Chat dùng để nhắn tin và gửi file trực tiếp giữa các thiết bị trong cùng mạng LAN."
+  />
+  <title>LAN Chat · Nearby only</title>
+  <link rel="icon" href="./assets/logo-planet.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="page-decoration page-decoration--left" aria-hidden="true"></div>
+  <div class="page-decoration page-decoration--right" aria-hidden="true"></div>
+
+  <main class="app-shell" aria-label="Ứng dụng LAN Chat">
+    <section class="chat-column" aria-label="Khu vực trò chuyện">
+      <header class="brand-banner">
+        <div class="brand-lockup">
+          <img class="brand-logo" src="./assets/logo-planet.svg" alt="" />
+          <div class="brand-copy">
+            <h1><strong>LAN</strong> Chat</h1>
+            <p>Chat directly. Nearby only.</p>
+          </div>
+        </div>
+        <span class="brand-dots" aria-hidden="true"></span>
+        <img class="hero-character" src="./assets/Chiikawa.png" alt="" />
+      </header>
+
+      <section class="chat-panel" aria-label="Hội thoại với Huy">
+        <header class="chat-peer-heading">
+          <div class="avatar-wrap avatar-wrap--large avatar-bubble">
+            <img id="peerAvatar" src="./assets/Chiikawa.png" alt="Avatar của Huy" />
+            <i class="online-indicator" aria-label="Đang online"></i>
+          </div>
+          <div class="peer-heading-copy">
+            <h2 id="peerName">Chọn người dùng</h2>
+            <p id="peerDetails">Đang kết nối…</p>
+          </div>
+        </header>
+
+        <div class="message-list" id="messageList" role="log" aria-live="polite" aria-label="Tin nhắn">
+
+        </div>
+
+        <p id="notice" class="notice" role="alert" hidden></p>
+        <form class="composer" id="composer" autocomplete="off">
+          <label class="icon-button attach-button" for="fileInput" title="Đính kèm file">
+            <img src="./assets/paperclip.svg" alt="" />
+            <span class="sr-only">Đính kèm file</span>
+          </label>
+          <input id="fileInput" type="file" hidden />
+          <label class="message-field">
+            <span class="sr-only">Nhập tin nhắn</span>
+            <input id="messageInput" name="message" type="text" placeholder="Nhập tin nhắn..." maxlength="2000" />
+          </label>
+          <button class="icon-button send-button" type="submit" title="Gửi tin nhắn">
+            <img src="./assets/send.svg" alt="" />
+            <span class="sr-only">Gửi tin nhắn</span>
+          </button>
+        </form>
+      </section>
+    </section>
+
+    <aside class="sidebar" aria-label="Tài khoản và người dùng trong LAN">
+      <section class="my-profile" aria-label="Thông tin của tôi">
+        <div class="profile-avatar-wrap avatar-bubble">
+          <img class="profile-avatar" src="./assets/Momonga.png" alt="Avatar của Hoàng" />
+        </div>
+        <h2>Đang kết nối…</h2>
+        <p></p><small id="serverStatus" role="status">Đang kết nối…</small>
+      </section>
+
+      <section class="nearby-panel" aria-labelledby="nearbyTitle">
+        <div class="nearby-toolbar">
+          <h2 class="nearby-heading" id="nearbyTitle">
+            <img src="./assets/radar.svg" alt="" />
+            <span>Nearby Friends</span>
+          </h2>
+          <button class="refresh-button" id="refreshPeers" type="button" aria-label="Làm mới danh sách người dùng" title="Làm mới danh sách">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 11a8.1 8.1 0 0 0-14.9-4.3L3 9m0 0V4m0 5h5M4 13a8.1 8.1 0 0 0 14.9 4.3L21 15m0 0v5m0-5h-5" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="peerList" class="peer-list">
+
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
