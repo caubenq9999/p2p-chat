@@ -18,6 +18,14 @@
   --radius-md: 18px;
 }
 
+/* Live TCP bridge controls; original Hoang layout is preserved. */
+.notice { margin: 0; padding: 8px 20px; background: #fff0f7; color: #a52459; }
+.file-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.file-actions button, .file-actions a { border: 1px solid #f75fa2; border-radius: 8px; background: white; color: #ad245e; padding: 6px 10px; text-decoration: none; cursor: pointer; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.bubble { white-space: pre-wrap; overflow-wrap: anywhere; }
+.image-preview { display: block; margin-bottom: 8px; }
+.image-preview img { display: block; max-width: min(360px, 60vw); max-height: 280px; border-radius: 16px; object-fit: contain; background: #fff0f7; }
 *,
 *::before,
 *::after {
